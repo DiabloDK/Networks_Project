@@ -1,13 +1,14 @@
 import socket
-import json
 import threading
+import os
 
+MUSIC_FOLDER = 'Music'
 IP=socket.gethostbyname(socket.gethostname())
 PORT=5566
 ADDR=(IP,PORT)
 FORMAT='utf-8'
 DISCONNECT_MSG = '!DISCONNECT'
-BUFFER_SIZE=2048
+BUFFER_SIZE=4096
 
 USER_DATABASE_FILE = 'user_database.txt'
 
@@ -68,23 +69,53 @@ def handle_client(conn,addr):
     conn.send(msg.encode(FORMAT))
     while connected:
         conn.send("[SERVER] LOGIN/REGISTER : ".encode(FORMAT))
-        msg=conn.recv(BUFFER_SIZE).decode(FORMAT)
-        print(msg)
+        msg=conn.recv(BUFFER_SIZE).decode(FORMAT).lower()
         if(msg=="register"):
             if register(conn):
                 continue
         elif(msg=="login"):
             if login(conn):
-                connected=False
+                conn.send("[SERVER] LOGIN SUCCESS".encode(FORMAT))
+                inside_functions(conn)
+
             else:
                 conn.send("[SERVER] LOGIN FAILED".encode(FORMAT))
-        elif(msg==DISCONNECT_MSG):
+        elif(msg.upper()==DISCONNECT_MSG):
             connected=False
         else:
             continue
-    print(msg)
+
     conn.close()
 
+def music_Stream(conn):
+    music_files = os.listdir(MUSIC_FOLDER)
+    music_list = '\n'.join([f"{index+1}. {file}" for index, file in enumerate(music_files)])
+    conn.send(music_list.encode(FORMAT))
+    client_choice = conn.recv(BUFFER_SIZE).decode(FORMAT)
+    print(client_choice,type(client_choice))
+    if client_choice.isdigit() and int(client_choice) <= len(music_files):
+        # conn.send("Valid choice".encode(FORMAT))
+        chosen_index = int(client_choice) - 1
+        chosen_file = music_files[chosen_index]
+        file_path = os.path.join(MUSIC_FOLDER, chosen_file)
+        print("HOLA")
+        with open(file_path, 'rb') as file:
+            while True:
+                chunk = file.read(BUFFER_SIZE)
+                if not chunk:
+                    break
+                conn.send(chunk)
+    else:
+        conn.send("Invalid choice".encode(FORMAT))
+
+
+def inside_functions(conn):
+    conn.send("[SERVER]CHOOSE YOUR ENTERTAINMENT\n1.MUSIC STREAMING\n".encode(FORMAT))
+    choice=conn.recv(BUFFER_SIZE).decode()
+    if(choice=='1'):
+        music_Stream(conn)
+
+    
 
 def main():
     print('[STARTING SERVER] THE SERVER IS STARTING---')
